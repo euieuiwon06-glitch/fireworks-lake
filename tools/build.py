@@ -20,7 +20,8 @@ SKY_LUM = 75                # 이보다 어두우면 하늘 후보
 MLINE0 = 132                # 산·구름 선을 찾기 시작하는 행
 HIGH = 90                   # 이 행 위는 구름이 있어도 폭죽이 앞(높은 구름·별)
 SKY_TOP, SKY_LOW = (16, 23, 56), (20, 37, 104)  # 하늘 위·아래 색(원본 팔레트)
-SKY_T0, SKY_T1 = 70, 125    # 그라데이션 디더 구간(행)
+SKY_EDGE = 108              # 하늘 두 색 경계(행, 물결 ±8)
+STAR_ROWS = 100             # 이 행 위는 별만
 
 
 def grid_svg(g, scale):
@@ -77,11 +78,14 @@ def main():
     high = np.zeros((H, W), bool); high[:HIGH] = True
     visible = sky | high
     visible[water:] = False
-    # 하늘 칸만 깨끗한 픽셀 그라데이션으로 다시 칠함
-    bayer = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) / 16 + 1 / 32
+    # 위쪽(STAR_ROWS행 위)은 별(밝은 점)만 남기고 나머지 조각은 하늘로
+    top = np.zeros((H, W), bool); top[:STAR_ROWS] = True
+    sky |= top & (lum < 150)
+    # 하늘 칸: 무늬 없이 두 색 면(위 어두운 남색 / 아래 밝은 남색), 경계는 완만한 물결 계단
+    xs = np.arange(W)
+    edge = (SKY_EDGE + 5 * np.sin(xs / 23.0) + 3 * np.sin(xs / 9.7 + 1)).round().astype(int)
     for y, x in zip(*np.nonzero(sky)):
-        t = np.clip((y - SKY_T0) / (SKY_T1 - SKY_T0), 0, 1)
-        out[y, x] = SKY_LOW if t > bayer[y % 4, x % 4] else SKY_TOP
+        out[y, x] = SKY_LOW if y >= edge[x] else SKY_TOP
     fg = np.where(visible | (np.arange(H)[:, None] >= water), 0, 255).astype(np.uint8)
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 
