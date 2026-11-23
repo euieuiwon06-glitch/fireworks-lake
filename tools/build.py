@@ -17,6 +17,8 @@ ROOT = os.path.dirname(HERE)
 FLAT = os.path.join(ROOT, "..", "벡터", "tools", "flat_pixel_svg.py")
 CELL, SHIFT, WATER_PX = 4, 5, 930
 SKY_LUM = 75                # 이보다 어두우면 하늘 후보
+REFL_LUM = 110              # 물에서 이보다 밝으면 비친 산
+REFL_MIN = 40               # 이보다 작은 덩어리(불빛 줄)는 제외
 MLINE0 = 132                # 산·구름 선을 찾기 시작하는 행
 HIGH = 90                   # 이 행 위는 구름이 있어도 폭죽이 앞(높은 구름·별)
 SKY_TOP, SKY_LOW = (16, 23, 56), (20, 37, 104)  # 하늘 위·아래 색(원본 팔레트)
@@ -104,6 +106,15 @@ def main():
     visible = sky | high
     visible[water:] = False
     fg = np.where(visible | (np.arange(H)[:, None] >= water), 0, 255).astype(np.uint8)
+    # 물에 비친 산(밝은 반사 덩어리)도 앞가림: 폭죽 반사는 이 뒤로 숨음
+    from scipy import ndimage
+    wl = lum[water:] > REFL_LUM
+    wl = ndimage.binary_closing(wl, np.ones((3, 3)), iterations=2)
+    wl = ndimage.binary_fill_holes(wl)
+    lab, n = ndimage.label(wl)
+    sizes = ndimage.sum(wl, lab, range(1, n + 1))
+    wl = np.isin(lab, [i + 1 for i, sz in enumerate(sizes) if sz >= REFL_MIN])
+    fg[water:][wl] = 255
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 
     A = os.path.join(ROOT, "assets"); os.makedirs(A, exist_ok=True)

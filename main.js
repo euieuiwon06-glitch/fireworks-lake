@@ -29,7 +29,7 @@ const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
 const W = 280, H = 350;
 
-let base, baseLum, visible, meta, waterY, skyline;
+let base, baseLum, visible, waterOcc, meta, waterY, skyline;
 const frame = ctx.createImageData(W, H);
 const buf32 = new Uint32Array(frame.data.buffer);
 const fw = new Uint32Array(W * H);      // 이번 프레임 폭죽 색(0 = 없음)
@@ -273,7 +273,8 @@ function compose(time) {
         }
         if (f) break;
       }
-      if (f && hash(seg, y * 31 + tick) >= 0.22) c = REFL[f] || f;   // 토막 사이로 끊김
+      // 물에 비친 산 뒤로 숨음(물결 떨림을 같이 따라감)
+      if (f && !waterOcc[si] && hash(seg, y * 31 + tick) >= 0.22) c = REFL[f] || f;   // 토막 사이로 끊김
       buf32[y * W + x] = c;
     }
   }
@@ -296,14 +297,19 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124f'), loadImg('assets/fg.png?v=20261124f'),
-    fetch('assets/meta.json?v=20261124f').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124g'), loadImg('assets/fg.png?v=20261124g'),
+    fetch('assets/meta.json?v=20261124g').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
   const fg = pixels(fImg);
   visible = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) visible[i] = fg[i * 4] < 128 && (i / W | 0) < waterY ? 1 : 0;
+  waterOcc = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const under = (i / W | 0) >= waterY, solid = fg[i * 4] >= 128;
+    visible[i] = !solid && !under ? 1 : 0;
+    waterOcc[i] = solid && under ? 1 : 0;           // 물에 비친 산·불빛
+  }
   baseLum = new Uint8Array(W * H);
   const bd = new Uint8Array(base.buffer);
   for (let i = 0; i < W * H; i++) baseLum[i] = bd[i * 4] * 0.299 + bd[i * 4 + 1] * 0.587 + bd[i * 4 + 2] * 0.114;
