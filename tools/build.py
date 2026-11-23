@@ -39,22 +39,47 @@ def grid_svg(g, scale):
     return chr(10).join(parts + ["</svg>"])
 
 
-def main():
-    src = sys.argv[1]
-    tmp = tempfile.mkdtemp()
-    clean = os.path.join(tmp, "clean.png")
-    subprocess.check_call([sys.executable, os.path.join(HERE, "clean_fireworks.py"), src, clean])
-    svg = os.path.join(tmp, "base.svg"); prev = os.path.join(tmp, "prev.png")
-    subprocess.check_call([sys.executable, FLAT, clean, svg, "--cell", str(CELL), "--water-y", str(WATER_PX),
+def flat_grid(img_path, tmp, name):
+    svg = os.path.join(tmp, name + ".svg"); prev = os.path.join(tmp, name + ".png")
+    subprocess.check_call([sys.executable, FLAT, img_path, svg, "--cell", str(CELL), "--water-y", str(WATER_PX),
                            "--reflect-dim", "0.85", "--preview", prev])
     big = np.asarray(Image.open(prev).convert("RGB"))
     g = big[CELL // 2::CELL, CELL // 2::CELL][:350, :280]
-    H, W = g.shape[:2]
-    # 아래로 SHIFT칸: 위 빈 줄은 맨 윗줄의 가장 흔한 색(하늘)
     cols, cnt = np.unique(g[0].reshape(-1, 3), axis=0, return_counts=True)
-    sky0 = cols[cnt.argmax()]
-    out = np.empty_like(g); out[SHIFT:] = g[:-SHIFT]; out[:SHIFT] = sky0
+    out = np.empty_like(g); out[SHIFT:] = g[:-SHIFT]; out[:SHIFT] = cols[cnt.argmax()]   # 아래로 SHIFT칸
+    return out
+
+
+def fill_from_neighbors(g, hole):
+    """구멍 칸 = 가장 가까운(유클리드) 구멍 아닌 칸의 색 → 둥근 면으로 자연스럽게, 무늬 없음."""
+    from scipy import ndimage
+    _, (iy, ix) = ndimage.distance_transform_edt(hole, return_indices=True)
+    return g[iy, ix]
+
+
+def main():
+    src = sys.argv[1]
+    tmp = tempfile.mkdtemp()
+    clean = os.path.join(tmp, "clean.png"); maskp = os.path.join(tmp, "mask.png")
+    subprocess.check_call([sys.executable, os.path.join(HERE, "clean_fireworks.py"), src, clean, "-", maskp])
     water = WATER_PX // CELL + 1 + SHIFT
+    below = flat_grid(clean, tmp, "clean")           # 물: 불꽃 반사 지운 버전
+    above = flat_grid(src, tmp, "orig")              # 물 위: 플랫 픽셀 파일 그대로(하늘·연기구름 유지)
+    H, W = above.shape[:2]
+    # 불꽃 칸: 원본 마스크를 칸으로(16px 중 2px 이상) + 그 둘레 2칸 안의 따뜻한 색(분홍·크림·보라빛) 칸
+    m = np.asarray(Image.open(maskp)) > 0
+    m = m[:H * CELL, :W * CELL].reshape(H, CELL, W, CELL).sum((1, 3)) >= 2
+    mm = np.zeros_like(m); mm[SHIFT:] = m[:-SHIFT]
+    near = mm.copy()
+    for _ in range(2):
+        p = np.pad(near, 1)
+        near = near | p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:] | p[:-2, :-2] | p[:-2, 2:] | p[2:, :-2] | p[2:, 2:]
+    r, gch, b = [above[..., i].astype(int) for i in range(3)]
+    warm = r >= b - 25
+    hole = (mm | (near & warm))
+    hole[water:] = False
+    out = fill_from_neighbors(above, hole)
+    out[water:] = below[water:]
 
     # 하늘 = 맨 윗줄에서 어두운 칸(lum<SKY_LUM)으로만 4방향으로 이어지는 영역(물 위까지)
     lum = out.astype(float) @ [0.299, 0.587, 0.114]
@@ -78,14 +103,6 @@ def main():
     high = np.zeros((H, W), bool); high[:HIGH] = True
     visible = sky | high
     visible[water:] = False
-    # 위쪽(STAR_ROWS행 위)은 별(밝은 점)만 남기고 나머지 조각은 하늘로
-    top = np.zeros((H, W), bool); top[:STAR_ROWS] = True
-    sky |= top & (lum < 150)
-    # 하늘 칸: 무늬 없이 두 색 면(위 어두운 남색 / 아래 밝은 남색), 경계는 완만한 물결 계단
-    xs = np.arange(W)
-    edge = (SKY_EDGE + 5 * np.sin(xs / 23.0) + 3 * np.sin(xs / 9.7 + 1)).round().astype(int)
-    for y, x in zip(*np.nonzero(sky)):
-        out[y, x] = SKY_LOW if y >= edge[x] else SKY_TOP
     fg = np.where(visible | (np.arange(H)[:, None] >= water), 0, 255).astype(np.uint8)
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 

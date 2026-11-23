@@ -1,6 +1,6 @@
 """원본(분홍 불꽃 그림)에서 불꽃과 물 반사를 지워 '산과 물가만' 남긴 이미지.
 
-사용: python clean_fireworks.py 원본.png 출력.png [마스크확인.png]
+사용: python clean_fireworks.py 원본.png 출력.png [마스크확인.png|-] [마스크.png]
 지우는 것
 - 분홍 계열 픽셀 전부(하늘 불꽃 + 물 반사). 물가 마을 불빛 줄(y 895~935)은 남김
 - 흰 불꽃 획: 흰 불꽃이 있는 상자 안에서, 밝고 주변 바탕이 어두운 가는 획(산 능선 위쪽만)
@@ -72,8 +72,10 @@ def main():
                 pool = src_x[:48]
             out[y, run] = bgr[y, pool[np.arange(len(run)) % len(pool)]]
     cv2.imwrite(dst, out)
-    if len(sys.argv) > 3:
+    if len(sys.argv) > 3 and sys.argv[3] != "-":
         vis = bgr.copy(); vis[mask] = (0, 255, 0); cv2.imwrite(sys.argv[3], vis)
+    if len(sys.argv) > 4:
+        cv2.imwrite(sys.argv[4], mask.astype(np.uint8) * 255)
     print("masked %.1f%%" % (100 * mask.mean()))
 
 

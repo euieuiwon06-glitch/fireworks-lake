@@ -11,10 +11,12 @@ const CONFIG = {
   maxParticles: 12000,
   followChance: 0.45,   // 큰 폭죽 뒤 주변에 작은 폭죽이 연달아 터질 확률
   glowTime: 0.22,       // 터질 때 주변 하늘이 밝아지는 시간(초)
-  flowSpeed: [7, 30],   // 물결 흐름 속도(칸/초): 물가 → 화면 아래(가까울수록 빠름), 오른쪽→왼쪽
+  flowSpeed: [3, 10],   // 떨림 토막이 왼쪽으로 흐르는 속도(칸/초): 물가 → 화면 아래
+  jitterRate: 4,        // 토막마다 떨림이 바뀌는 횟수(초당)
+  glint: 0.04,          // 밝은 물 칸이 반짝일 확률(프레임당 1/8초 단위)
 };
 const SKY_TOP = '#101738', SKY_LOW = '#142568', SKY_GLOW = '#1f2a59';
-const WATER = { normal: '#4d508d', light: '#656596', onBright: '#363e6e' };
+const GLINT = '#f3e8da';
 
 // 원본 그림 팔레트(어두움 → 밝음)
 const PAL = {
@@ -28,7 +30,6 @@ const ctx = cvs.getContext('2d');
 const W = 280, H = 350;
 
 let base, baseLum, visible, meta, waterY, skyline;
-const streaks = [];
 const frame = ctx.createImageData(W, H);
 const buf32 = new Uint32Array(frame.data.buffer);
 const fw = new Uint32Array(W * H);      // 이번 프레임 폭죽 색(0 = 없음)
@@ -52,7 +53,7 @@ function reflectRgb(hex) {
 }
 const COLOR = {}, REFL = {};
 const C_TOP = pack(hexToRgb(SKY_TOP)), C_LOW = pack(hexToRgb(SKY_LOW)), C_GLOW = pack(hexToRgb(SKY_GLOW));
-const C_WATER = Object.fromEntries(Object.entries(WATER).map(([k, h]) => [k, pack(hexToRgb(h))]));
+const C_GLINT = pack(hexToRgb(GLINT));
 for (const p of Object.values(PAL)) for (const h of p) { COLOR[h] = pack(hexToRgb(h)); REFL[pack(hexToRgb(h))] = pack(reflectRgb(h)); }
 
 // ---------- 불러오기 ----------
@@ -237,41 +238,43 @@ function compose(time) {
     }
   }
   for (let i = 0; i < W * waterY; i++) if (fw[i]) buf32[i] = fw[i];
-  // 물: 줄마다 살짝 출렁 + 오른쪽→왼쪽으로 흐르는 물결 줄
-  for (let y = waterY; y < H; y++) {
-    const sh = Math.round(Math.sin(y * 0.7 + time * 2.0) * 0.9), row = y * W;
-    if (sh) for (let x = 0; x < W; x++) buf32[row + x] = base[row + Math.max(0, Math.min(W - 1, x + sh))];
-  }
-  for (const st of streaks) {
-    const span = W + 60;
-    const x0 = Math.round((((st.p - st.v * time) % span) + span) % span) - 30;
-    const row = st.y * W;
-    for (let x = x0; x < x0 + st.len; x++) {
-      if (x < 0 || x >= W) continue;
-      buf32[row + x] = baseLum[row + x] > 140 ? C_WATER.onBright : st.light ? C_WATER.light : C_WATER.normal;
-    }
-  }
-  // 물 반사: 아래로 갈수록 더 높은 하늘을 비춤(세로 압축) + 가로 물결 흔들림 + 가로로 번짐 + 군데군데 끊김
+  // 물: 새 픽셀 없이 기존 픽셀이 짧은 토막 단위로 좌우(가끔 위아래)로 1~2칸 떨림.
+  //     토막 무늬는 천천히 오른쪽→왼쪽으로 흘러감. 밝은 칸(비친 산·불빛)은 가끔 반짝(윤슬).
+  //     폭죽 반사도 같은 떨림을 따름.
   const K = CONFIG.reflectK, tick = Math.floor(time * 8);
+  const [v0, v1] = CONFIG.flowSpeed;
   for (let y = waterY; y < H; y++) {
+    const k = (y - waterY) / (H - waterY);              // 0 물가 → 1 화면 아래
+    const L = 4 + ((k * 10) | 0);                       // 토막 길이(가까울수록 김)
+    const v = v0 + (v1 - v0) * k;
+    const amp = k > 0.45 ? 2 : 1;
     const d = (y - waterY) / K;
     const sy0 = Math.round(waterY - d), sy1 = Math.round(waterY - d - 1 / K + 1);
-    const xo = Math.round(Math.sin(y * 0.9 + time * 3.2) * 1.2 + Math.sin(y * 0.31 - time * 1.7) * 0.8);
     for (let x = 0; x < W; x++) {
-      let c = 0;
-      for (const sy of [sy0, sy1]) {
-        if (sy < 0 || sy >= waterY) continue;
-        for (const dx of [0, -1, 1]) {
-          const sx = x + xo + dx;
-          if (sx < 0 || sx >= W) continue;
-          const v = fw[sy * W + sx];
-          if (v) { c = v; break; }
+      const seg = Math.floor((x + v * time) / L);
+      const tk = Math.floor(time * CONFIG.jitterRate + hash(seg, y * 7 + 3) * 7);
+      const r = hash(seg * 13 + tk, y * 29 + 1);
+      const dx = Math.max(-amp, Math.min(amp, Math.round((r - 0.5) * 2.6 * amp)));
+      const r2 = hash(seg * 5 + tk, y * 11 + 7);
+      const sy = Math.max(waterY, Math.min(H - 1, y + (r2 < 0.07 ? -1 : r2 > 0.93 ? 1 : 0)));
+      const sx = Math.max(0, Math.min(W - 1, x + dx));
+      const si = sy * W + sx;
+      let c = base[si];
+      if (baseLum[si] > 140 && hash(x * 3 + tick * 17, y * 31) < CONFIG.glint) c = C_GLINT;
+      // 폭죽 반사
+      let f = 0;
+      for (const ry of [sy0, sy1]) {
+        if (ry < 0 || ry >= waterY) continue;
+        for (const ex of [0, -1, 1]) {
+          const rx = sx + ex;
+          if (rx < 0 || rx >= W) continue;
+          const vv = fw[ry * W + rx];
+          if (vv) { f = vv; break; }
         }
-        if (c) break;
+        if (f) break;
       }
-      if (!c) continue;
-      if (hash(x >> 2, y * 31 + tick) < 0.22) continue;   // 물결 사이로 끊김
-      buf32[y * W + x] = REFL[c] || c;
+      if (f && hash(seg, y * 31 + tick) >= 0.22) c = REFL[f] || f;   // 토막 사이로 끊김
+      buf32[y * W + x] = c;
     }
   }
   ctx.putImageData(frame, 0, 0);
@@ -293,8 +296,8 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124d'), loadImg('assets/fg.png?v=20261124d'),
-    fetch('assets/meta.json?v=20261124d').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124f'), loadImg('assets/fg.png?v=20261124f'),
+    fetch('assets/meta.json?v=20261124f').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
@@ -304,13 +307,6 @@ function onDown(e) {
   baseLum = new Uint8Array(W * H);
   const bd = new Uint8Array(base.buffer);
   for (let i = 0; i < W * H; i++) baseLum[i] = bd[i * 4] * 0.299 + bd[i * 4 + 1] * 0.587 + bd[i * 4 + 2] * 0.114;
-  for (let y = waterY + 1; y < H; y += 2) {
-    const k = (y - waterY) / (H - waterY);                   // 0 물가 → 1 화면 아래
-    const v = CONFIG.flowSpeed[0] + (CONFIG.flowSpeed[1] - CONFIG.flowSpeed[0]) * k;
-    const n = 2 + Math.round(k * 3);
-    for (let j = 0; j < n; j++)
-      streaks.push({ y, v: v * rand(0.85, 1.15), p: rand(0, W + 60), len: Math.round(3 + rand(0, 4 + k * 10)), light: Math.random() < 0.2 });
-  }
   cvs.addEventListener('pointerdown', onDown);
   cvs.addEventListener('contextmenu', e => e.preventDefault());
   let last = performance.now();
