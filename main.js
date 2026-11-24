@@ -1,4 +1,4 @@
-// 불꽃 호수 — 좌클릭(터치)한 곳에 폭죽. 폭죽은 산 뒤에서 솟아올라 하늘에서 피고, 호수에 비친다.
+// 불꽃 호수 — 좌클릭(터치)한 곳 / 손을 쥐었다 편 곳(hand.js)에 폭죽. Tab = 전체 모드(스페이스바 폭죽). 폭죽은 산 뒤에서 솟아올라 하늘에서 피고, 호수에 비친다.
 // 모든 그림은 280×350 픽셀 격자(원본 4px = 1칸)에 찍고 CSS로 확대(pixelated).
 
 const CONFIG = {
@@ -287,6 +287,7 @@ function compose(time) {
     }
   }
   drawBoat(time);
+  drawHands();
   ctx.putImageData(frame, 0, 0);
 }
 
@@ -327,27 +328,75 @@ function drawBoat(time) {
 }
 
 // ---------- 입력 ----------
-function onDown(e) {
-  if (e.button !== 0) return;              // 좌클릭(터치 포함)만
-  const r = cvs.getBoundingClientRect();
-  let x = ((e.clientX - r.left) / r.width) * W;
-  let y = ((e.clientY - r.top) / r.height) * H;
+// 격자 좌표 (x, y) → 실제로 터질 하늘 자리(물이면 비친 하늘, 산·구름 선보다 위)
+function aim(x, y) {
   if (y >= waterY) y = waterY - (y - waterY) / CONFIG.reflectK;   // 물을 누르면 비친 하늘 자리
   x = Math.max(8, Math.min(W - 9, x));
   const top = skyline[Math.round(x)] - CONFIG.minAboveRidge;
   y = Math.max(20, Math.min(top, y));
   launch(x, y);
 }
-
-// 스페이스바 = 하늘의 무작위 자리에 폭죽 하나(누를 때마다, 꾹 누름 반복은 무시)
-function onKey(e) {
-  if (e.code !== 'Space' && e.key !== ' ') return;
-  e.preventDefault();
-  if (e.repeat) return;
+function randomLaunch() {
   const x = rand(18, W - 19);
   const top = skyline[Math.round(x)] - CONFIG.minAboveRidge;
   launch(x, rand(22, Math.max(30, Math.min(top, CONFIG.spaceMaxY))));
 }
+
+function onDown(e) {
+  if (e.button !== 0 || full) return;      // 좌클릭(터치 포함)만, 전체 모드에선 스페이스바만
+  const r = cvs.getBoundingClientRect();
+  aim(((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H);
+}
+
+// Tab = 전체 모드 전환(카메라 숨김·손 인식 멈춤·클릭 끔), 전체 모드에서 스페이스바 = 무작위 폭죽
+let full = false, lastSpace = 0;
+function setFull(on) {
+  full = on;
+  document.body.classList.toggle('full', on);
+  window.__fw.full = on;
+  if (on) window.__fw.hands = [];
+}
+function onKey(e) {
+  if (e.code === 'Tab') { e.preventDefault(); if (!e.repeat) setFull(!full); return; }
+  if (e.code !== 'Space' && e.key !== ' ') return;
+  e.preventDefault();
+  if (!full) return;
+  const now = performance.now();
+  if (now - lastSpace < 120) return;       // 꾹 누르면 0.12초마다
+  lastSpace = now;
+  randomLaunch();
+}
+
+// 원 그리기 축포: 하늘 여기저기에서 무작위로 연달아
+function show() {
+  const n = 7 + (Math.random() * 3 | 0);
+  let t = 0;
+  for (let i = 0; i < n; i++) { t += rand(90, 200); setTimeout(randomLaunch, t); }
+}
+
+// 손 표시(hand.js가 넣어 줌): 편 손 = 점선 고리, 쥔 손 = 작은 고리
+function drawHands() {
+  const hs = window.__fw && window.__fw.hands;
+  if (!hs || !hs.length) return;
+  for (const h of hs) {
+    const cx = h.x | 0, cy = h.y | 0, r = h.open ? 5 : 2, n = h.open ? 24 : 12;
+    for (let k = 0; k < n; k++) {
+      if (h.open && k % 2) continue;
+      const a = (k / n) * Math.PI * 2;
+      const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
+      if (x >= 0 && y >= 0 && x < W && y < H) buf32[y * W + x] = C_GLINT;
+    }
+  }
+}
+
+// hand.js 와 연결: 격자 크기, 발사(하늘 자리로 맞춤), 축포, 전체 모드 여부
+window.__fw = {
+  W, visTop: 0, full: false, hands: [], circle: true,
+  get H() { return waterY || H; },      // 손 위치는 하늘(물가 위)에만 대응
+  launch: (x, y) => { if (skyline) aim(x, y); },
+  show,
+  setFull: (on) => setFull(on),
+};
 
 // ---------- 시작 ----------
 (async function init() {

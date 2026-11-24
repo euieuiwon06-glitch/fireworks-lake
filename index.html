@@ -6,21 +6,29 @@
 <title>불꽃 호수</title>
 <style>
   html, body { margin: 0; height: 100%; background: #101738; overflow: hidden; }
-  body { display: grid; place-items: center; }
-  canvas {
-    display: block;
-    width: min(100vw, calc(100dvh * 0.8));
-    height: auto;
-    aspect-ratio: 280 / 350;
-    image-rendering: pixelated;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
+  body { display: grid; place-items: center; touch-action: manipulation;
+         -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  /* 9:16 무대: 위 = 내 모습(카메라), 아래 = 불꽃 호수(4:5) */
+  #stage { position: relative; width: min(100vw, calc(100dvh * 9 / 16)); aspect-ratio: 9 / 16;
+           background: #101738; overflow: hidden; }
+  #cam { position: absolute; left: 0; top: 0; width: 100%; height: 29.7%; background: #0b0b0b; overflow: hidden; }
+  #cam canvas { display: block; width: 100%; height: 100%; }
+  #cam .hint { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 12%;
+               text-align: center; color: #777; font: 13px/1.6 system-ui, sans-serif; letter-spacing: .02em; }
+  #art { position: absolute; left: 0; bottom: 0; width: 100%; height: 70.3%; overflow: hidden; cursor: pointer; }
+  #art canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  /* Tab 전체 모드: 카메라 숨기고 불꽃 호수(4:5)만 화면 가득 */
+  body.full #stage { width: min(100vw, calc(100dvh * 0.8)); aspect-ratio: 280 / 350; }
+  body.full #cam { display: none; }
+  body.full #art { height: 100%; cursor: default; }
 </style>
 </head>
 <body>
-<canvas id="c" width="280" height="350" aria-label="산과 호수 위로 클릭하면 폭죽이 피어오르는 픽셀 그림"></canvas>
-<script src="main.js?v=20261124q"></script>
+<div id="stage">
+  <div id="cam"><canvas id="camc"></canvas><div class="hint">카메라를 허용하면 손으로 폭죽을 터뜨릴 수 있어요</div></div>
+  <div id="art"><canvas id="c" width="280" height="350" aria-label="산과 호수 위로 클릭하거나 손을 쥐었다 펴면 폭죽이 피어오르는 픽셀 그림"></canvas></div>
+</div>
+<script src="main.js?v=20261124r"></script>
+<script type="module" src="hand.js?v=20261124r"></script>
 </body>
 </html>
