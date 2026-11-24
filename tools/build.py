@@ -18,8 +18,6 @@ FLAT = os.path.join(ROOT, "..", "벡터", "tools", "flat_pixel_svg.py")
 CELL, SHIFT, WATER_PX = 4, 5, 930
 SKY_LUM = 75                # 이보다 어두우면 하늘 후보
 REFL_SAT, REFL_DIM = 0.8, 0.85   # 물에 비친 풍경 채도·밝기 배율
-BLUR_MAX = 5.0              # 화면 맨 아래 블러 세기(칸)
-BLUR_X = 1.6                # 가로 블러 배율
 LIGHT_ROWS = 26             # 물가 불빛 세로 줄을 남길 범위(행)
 MLINE0 = 132                # 산·구름 선을 찾기 시작하는 행
 HIGH = 90                   # 이 행 위는 구름이 있어도 폭죽이 앞(높은 구름·별)
@@ -130,20 +128,6 @@ def main():
                 out[y, x] = calm                            # 옛 그림의 산 반사 잔상 지우기
             elif light:
                 fg[y, x] = 255
-    # 화면 아래로 갈수록 비친 형태의 외곽이 블러처럼 부드럽게 퍼짐(가로로 조금 더)
-    wat = out[water:].astype(np.float32)
-    hw = H - water
-    sig_levels = [0.0, 1.0, 2.0, 3.5, 5.0, 7.0]
-    blurred = [wat] + [cv2.GaussianBlur(wat, (0, 0), sigmaX=sg * BLUR_X, sigmaY=sg) for sg in sig_levels[1:]]
-    res = np.empty_like(wat)
-    for r in range(hw):
-        sg = BLUR_MAX * (r / (hw - 1)) ** 1.5
-        i = np.searchsorted(sig_levels, sg, side="right") - 1
-        i = min(i, len(sig_levels) - 2)
-        t = (sg - sig_levels[i]) / (sig_levels[i + 1] - sig_levels[i])
-        res[r] = blurred[i][r] * (1 - t) + blurred[i + 1][r] * t
-    out[water:] = np.clip(res + 0.5, 0, 255).astype(np.uint8)
-
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 
     A = os.path.join(ROOT, "assets"); os.makedirs(A, exist_ok=True)
