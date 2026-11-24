@@ -341,9 +341,9 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124n'), loadImg('assets/fg.png?v=20261124n'),
-    loadImg('assets/boat.png?v=20261124n'),
-    fetch('assets/meta.json?v=20261124n').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124o'), loadImg('assets/fg.png?v=20261124o'),
+    loadImg('assets/boat.png?v=20261124o'),
+    fetch('assets/meta.json?v=20261124o').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));

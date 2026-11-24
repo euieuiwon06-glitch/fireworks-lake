@@ -18,6 +18,9 @@ FLAT = os.path.join(ROOT, "..", "벡터", "tools", "flat_pixel_svg.py")
 CELL, SHIFT, WATER_PX = 4, 5, 930
 SKY_LUM = 75                # 이보다 어두우면 하늘 후보
 REFL_SAT, REFL_DIM = 0.8, 0.85   # 물에 비친 풍경 채도·밝기 배율
+EDGE_START = 3              # 물가에서 이 행 아래부터 흩어짐
+EDGE_MAX = 9                # 화면 맨 아래 흩어짐 줄 최대 길이(칸)
+ROW_SHIFT = 2.2             # 화면 맨 아래 줄 어긋남(칸, 표준편차)
 LIGHT_ROWS = 26             # 물가 불빛 세로 줄을 남길 범위(행)
 MLINE0 = 132                # 산·구름 선을 찾기 시작하는 행
 HIGH = 90                   # 이 행 위는 구름이 있어도 폭죽이 앞(높은 구름·별)
@@ -128,6 +131,39 @@ def main():
                 out[y, x] = calm                            # 옛 그림의 산 반사 잔상 지우기
             elif light:
                 fg[y, x] = 255
+    # 비친 형태의 외곽이 가로로 흩어짐(원본 그림의 산 반사처럼): 아래로 갈수록 강하게
+    #  1) 줄마다 가로로 조금씩 어긋남  2) 경계에서 물 쪽으로 반사색 가로 줄 + 반사색·물색 중간톤 줄이 뻗음
+    rng = np.random.default_rng(7)
+    pal = np.unique(out.reshape(-1, 3), axis=0).astype(float)
+    def nearest(c):
+        return pal[((pal - c) ** 2).sum(1).argmin()].astype(np.uint8)
+    hw = H - water
+    for r in range(EDGE_START, hw):
+        y = water + r; k = r / (hw - 1)
+        sh = int(round(rng.normal(0, 0.5 + k * ROW_SHIFT)))
+        if sh:
+            out[y] = np.roll(out[y], sh, axis=0); fg[y] = np.roll(fg[y], sh)
+        o = fg[y] > 0
+        row = out[y].copy(); orow = o.copy()
+        for x in range(1, W):
+            if o[x] == o[x - 1]:
+                continue
+            src, d = (x - 1, 1) if o[x - 1] else (x, -1)          # 반사 칸 → 물 쪽 방향
+            oc = out[y, src].astype(float)
+            wx = src + d
+            wc = out[y, wx].astype(float) if 0 <= wx < W else oc
+            mid = nearest((oc + wc) / 2)
+            n1 = int(rng.integers(0, 1 + int(k * EDGE_MAX * 0.6) + 1))   # 반사색 줄
+            n2 = int(rng.integers(1, 2 + int(k * EDGE_MAX) + 1))         # 중간톤 줄
+            p = src + d
+            for i in range(n1 + n2):
+                if not (0 <= p < W) or o[p]:
+                    break
+                row[p] = oc.astype(np.uint8) if i < n1 else mid
+                if i < n1: orow[p] = True
+                p += d
+        out[y] = row; fg[y] = np.where(orow, 255, fg[y])
+
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 
     A = os.path.join(ROOT, "assets"); os.makedirs(A, exist_ok=True)
