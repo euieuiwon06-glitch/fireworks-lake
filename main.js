@@ -14,8 +14,6 @@ const CONFIG = {
   flowSpeed: [3, 10],   // 떨림 토막이 왼쪽으로 흐르는 속도(칸/초): 물가 → 화면 아래
   jitterRate: 4,        // 토막마다 떨림이 바뀌는 횟수(초당)
   glint: 0.04,
-  scatter: 3,
-  fade: 0.6,            // 화면 맨 아래에서 비친 풍경이 물 색으로 흩어지는 비율           // 화면 아래쪽 물 반사가 흩어지는 정도(추가 떨림 칸)
   boat: {
     bottom: 265,        // 배 바닥(물 위 줄) 행 — 사용자 지정 빨간 선 높이
     speed: 4,           // 칸/초 — 오른쪽 → 왼쪽, 천천히(한 바퀴 약 1분 20초)
@@ -38,7 +36,7 @@ const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
 const W = 280, H = 350;
 
-let base, baseLum, visible, waterOcc, calm, meta, waterY, skyline;
+let base, baseLum, visible, waterOcc, meta, waterY, skyline;
 const frame = ctx.createImageData(W, H);
 const buf32 = new Uint32Array(frame.data.buffer);
 const fw = new Uint32Array(W * H);      // 이번 프레임 폭죽 색(0 = 없음)
@@ -254,9 +252,9 @@ function compose(time) {
   const [v0, v1] = CONFIG.flowSpeed;
   for (let y = waterY; y < H; y++) {
     const k = (y - waterY) / (H - waterY);              // 0 물가 → 1 화면 아래
-    const L = Math.max(2, Math.round(5 - k * 3));       // 토막 길이(아래로 갈수록 잘게 → 외곽이 흩어짐)
+    const L = 4 + ((k * 10) | 0);                       // 토막 길이(가까울수록 김)
     const v = v0 + (v1 - v0) * k;
-    const amp = 1 + Math.round(k * k * CONFIG.scatter);  // 떨림 폭: 물가 1칸 → 화면 아래 최대 1+scatter칸
+    const amp = k > 0.45 ? 2 : 1;
     const d = (y - waterY) / K;
     const sy0 = Math.round(waterY - d), sy1 = Math.round(waterY - d - 1 / K + 1);
     for (let x = 0; x < W; x++) {
@@ -265,13 +263,10 @@ function compose(time) {
       const r = hash(seg * 13 + tk, y * 29 + 1);
       const dx = Math.max(-amp, Math.min(amp, Math.round((r - 0.5) * 2.6 * amp)));
       const r2 = hash(seg * 5 + tk, y * 11 + 7);
-      const pv = 0.07 + 0.3 * k * k, vy = 1 + (k > 0.6 && r2 * 7 % 1 < 0.5 ? 1 : 0);   // 아래일수록 위아래로도 더 흩어짐
-      const sy = Math.max(waterY, Math.min(H - 1, y + (r2 < pv / 2 ? -vy : r2 > 1 - pv / 2 ? vy : 0)));
+      const sy = Math.max(waterY, Math.min(H - 1, y + (r2 < 0.07 ? -1 : r2 > 0.93 ? 1 : 0)));
       const sx = Math.max(0, Math.min(W - 1, x + dx));
       const si = sy * W + sx;
       let c = base[si];
-      // 아래로 갈수록 비친 풍경이 물빛 속으로 흩어져 사라짐(짧은 가로 토막 단위로 물 색으로 바뀜)
-      if (waterOcc[si] && hash((x >> 1) + seg * 3, y * 7 + tk) < CONFIG.fade * Math.pow(k, 1.6)) c = calm[y];
       if (baseLum[si] > 140 && hash(x * 3 + tick * 17, y * 31) < CONFIG.glint) c = C_GLINT;
       // 폭죽 반사
       let f = 0;
@@ -346,9 +341,9 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124l'), loadImg('assets/fg.png?v=20261124l'),
-    loadImg('assets/boat.png?v=20261124l'),
-    fetch('assets/meta.json?v=20261124l').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124m'), loadImg('assets/fg.png?v=20261124m'),
+    loadImg('assets/boat.png?v=20261124m'),
+    fetch('assets/meta.json?v=20261124m').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
@@ -375,15 +370,6 @@ function onDown(e) {
       refl[i] = pack(reflectRgb('#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('')));
     }
     boat = { w: c.width, h: c.height, px, refl };
-  }
-  // 줄마다 물 바탕색(비친 풍경이 아닌 칸 중 가장 흔한 색)
-  calm = new Uint32Array(H);
-  for (let y = waterY; y < H; y++) {
-    const cnt = new Map();
-    for (let x = 0; x < W; x++) { const i = y * W + x; if (!waterOcc[i]) cnt.set(base[i], (cnt.get(base[i]) || 0) + 1); }
-    let best = base[y * W], bn = -1;
-    for (const [v, n] of cnt) if (n > bn) { bn = n; best = v; }
-    calm[y] = best;
   }
   cvs.addEventListener('pointerdown', onDown);
   cvs.addEventListener('contextmenu', e => e.preventDefault());
