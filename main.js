@@ -16,7 +16,7 @@ const CONFIG = {
   glint: 0.04,
   boat: {
     bottom: 265,        // 배 바닥(물 위 줄) 행 — 사용자 지정 빨간 선 높이
-    speed: 2.4,         // 칸/초 — 오른쪽 → 왼쪽, 아주 천천히(한 바퀴 약 2분 반)
+    speed: 4,           // 칸/초 — 오른쪽 → 왼쪽, 천천히(한 바퀴 약 1분 20초)
     gap: 40,            // 화면 밖에서 다시 나타나기까지 여유(칸)
     startX: 170,        // 페이지를 열었을 때 배 왼쪽 끝 위치(칸) — 처음부터 보이게
     reflect: 0.7,       // 물에 비친 배 세로 비율
@@ -341,9 +341,9 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124i'), loadImg('assets/fg.png?v=20261124i'),
-    loadImg('assets/boat.png?v=20261124i'),
-    fetch('assets/meta.json?v=20261124i').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124j'), loadImg('assets/fg.png?v=20261124j'),
+    loadImg('assets/boat.png?v=20261124j'),
+    fetch('assets/meta.json?v=20261124j').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));

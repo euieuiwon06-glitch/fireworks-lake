@@ -17,8 +17,8 @@ ROOT = os.path.dirname(HERE)
 FLAT = os.path.join(ROOT, "..", "벡터", "tools", "flat_pixel_svg.py")
 CELL, SHIFT, WATER_PX = 4, 5, 930
 SKY_LUM = 75                # 이보다 어두우면 하늘 후보
-REFL_LUM = 110              # 물에서 이보다 밝으면 비친 산
-REFL_MIN = 40               # 이보다 작은 덩어리(불빛 줄)는 제외
+REFL_SAT, REFL_DIM = 0.8, 0.85   # 물에 비친 풍경 채도·밝기 배율
+LIGHT_ROWS = 26             # 물가 불빛 세로 줄을 남길 범위(행)
 MLINE0 = 132                # 산·구름 선을 찾기 시작하는 행
 HIGH = 90                   # 이 행 위는 구름이 있어도 폭죽이 앞(높은 구름·별)
 SKY_TOP, SKY_LOW = (16, 23, 56), (20, 37, 104)  # 하늘 위·아래 색(원본 팔레트)
@@ -106,15 +106,28 @@ def main():
     visible = sky | high
     visible[water:] = False
     fg = np.where(visible | (np.arange(H)[:, None] >= water), 0, 255).astype(np.uint8)
-    # 물에 비친 산(밝은 반사 덩어리)도 앞가림: 폭죽 반사는 이 뒤로 숨음
-    from scipy import ndimage
-    wl = lum[water:] > REFL_LUM
-    wl = ndimage.binary_closing(wl, np.ones((3, 3)), iterations=2)
-    wl = ndimage.binary_fill_holes(wl)
-    lab, n = ndimage.label(wl)
-    sizes = ndimage.sum(wl, lab, range(1, n + 1))
-    wl = np.isin(lab, [i + 1 for i, sz in enumerate(sizes) if sz >= REFL_MIN])
-    fg[water:][wl] = 255
+    # 물 = 위 풍경(산·구름·땅)을 물가선 기준으로 그대로 뒤집어 비춤(채도 REFL_SAT·밝기 REFL_DIM).
+    #      하늘이 비치는 칸은 원래 물 무늬 유지, 물가 불빛의 세로 줄(물가 LIGHT_ROWS행 안의 밝은 칸)도 유지.
+    import cv2
+    obj = fg[:water] > 0                                   # 위 풍경의 앞가림(산·구름·땅)
+    hsv = cv2.cvtColor(out[:water].copy(), cv2.COLOR_RGB2HSV).astype(np.float64)
+    hsv[..., 1] *= REFL_SAT; hsv[..., 2] *= REFL_DIM
+    refl = cv2.cvtColor(np.clip(hsv, 0, 255).astype(np.uint8), cv2.COLOR_HSV2RGB)
+    wlum = lum[water:]
+    sky_rows = []
+    for y in range(water, H):
+        sy = 2 * water - 1 - y
+        rowcols = out[y][wlum[y - water] < 90]
+        calm = np.median(rowcols, axis=0).astype(np.uint8) if len(rowcols) else out[y, 0]
+        for x in range(W):
+            light = (y < water + LIGHT_ROWS) and wlum[y - water, x] > 150
+            if sy >= 0 and obj[sy, x] and not light:
+                out[y, x] = refl[sy, x]
+                fg[y, x] = 255                              # 폭죽 반사는 이 뒤로
+            elif not light and wlum[y - water, x] > 110:
+                out[y, x] = calm                            # 옛 그림의 산 반사 잔상 지우기
+            elif light:
+                fg[y, x] = 255
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 
     A = os.path.join(ROOT, "assets"); os.makedirs(A, exist_ok=True)

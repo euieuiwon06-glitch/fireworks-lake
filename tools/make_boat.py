@@ -1,6 +1,6 @@
 """배 사진 → 장면과 같은 플랫 픽셀 스프라이트(assets/boat.png, 투명 배경).
 
-사용: python tools/make_boat.py [폭(칸)=58]
+사용: python tools/make_boat.py [폭(칸)=46]
 - 배경(거의 단색 남색)과 색 차이로 배를 따냄, 물에 비친 부분(WATERLINE 아래)은 버림
 - 칸 평균으로 줄이고, 색은 장면 바탕(assets/base.png)의 팔레트 중 가장 가까운 색으로 바꿈 → 같은 그림 스타일
 - 외톨이 칸 정리(다수결)
@@ -12,13 +12,13 @@ from scipy import ndimage
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 WATERLINE = 233          # 원본에서 선체 바닥(이 아래는 물 반사)
-BROWN = np.array([[43, 28, 34], [66, 42, 42], [92, 58, 50], [122, 80, 62], [154, 108, 82]], float)  # 밤 갈색 단계(어두움→밝음)
+BROWN = np.array([[52, 22, 24], [84, 32, 30], [116, 46, 38], [148, 64, 48], [178, 88, 64]], float)  # 밤 붉은 갈색 단계(어두움→밝음)
 EDGE = 8                 # 원본 왼쪽 테두리 선 제외
 BG = np.array([23, 28, 60])
 
 
 def main():
-    width = int(sys.argv[1]) if len(sys.argv) > 1 else 58
+    width = int(sys.argv[1]) if len(sys.argv) > 1 else 46
     im = np.asarray(Image.open(os.path.join(HERE, "boat_src.png")).convert("RGB")).astype(float)
     diff = np.abs(im - BG).sum(-1)
     m = diff > 14
