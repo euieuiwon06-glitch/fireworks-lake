@@ -12,6 +12,7 @@ from scipy import ndimage
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 WATERLINE = 233          # 원본에서 선체 바닥(이 아래는 물 반사)
+BROWN = np.array([[43, 28, 34], [66, 42, 42], [92, 58, 50], [122, 80, 62], [154, 108, 82]], float)  # 밤 갈색 단계(어두움→밝음)
 EDGE = 8                 # 원본 왼쪽 테두리 선 제외
 BG = np.array([23, 28, 60])
 
@@ -66,6 +67,13 @@ def main():
                     v, c = np.unique(nb, return_counts=True)
                     out[y, x] = v[c.argmax()]
         lab = out
+    # 갈색 배: 밝기 순서는 그대로 두고 어두운~중간 색만 갈색 단계로(창·하이라이트 크림은 유지)
+    cols = pal.copy()
+    used = sorted({int(v) for v in np.unique(lab) if v >= 0}, key=lambda i: pal[i] @ [0.299, 0.587, 0.114])
+    dark = [i for i in used if pal[i] @ [0.299, 0.587, 0.114] < 170]
+    for k, i in enumerate(dark):
+        cols[i] = BROWN[min(len(BROWN) - 1, round(k * (len(BROWN) - 1) / max(1, len(dark) - 1)))]
+    pal = cols
     rgba = np.zeros((h, width, 4), np.uint8)
     rgba[lab >= 0, :3] = pal[lab[lab >= 0]].astype(np.uint8)
     rgba[lab >= 0, 3] = 255

@@ -15,7 +15,7 @@ const CONFIG = {
   jitterRate: 4,        // 토막마다 떨림이 바뀌는 횟수(초당)
   glint: 0.04,
   boat: {
-    bottom: 312,        // 배 바닥(물 위 줄) 행
+    bottom: 265,        // 배 바닥(물 위 줄) 행 — 사용자 지정 빨간 선 높이
     speed: 2.4,         // 칸/초 — 오른쪽 → 왼쪽, 아주 천천히(한 바퀴 약 2분 반)
     gap: 40,            // 화면 밖에서 다시 나타나기까지 여유(칸)
     startX: 170,        // 페이지를 열었을 때 배 왼쪽 끝 위치(칸) — 처음부터 보이게
@@ -341,9 +341,9 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124h'), loadImg('assets/fg.png?v=20261124h'),
-    loadImg('assets/boat.png?v=20261124h'),
-    fetch('assets/meta.json?v=20261124h').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124i'), loadImg('assets/fg.png?v=20261124i'),
+    loadImg('assets/boat.png?v=20261124i'),
+    fetch('assets/meta.json?v=20261124i').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
