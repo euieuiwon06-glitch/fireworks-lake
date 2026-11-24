@@ -369,7 +369,7 @@ function onKey(e) {
 
 // 원 그리기 축포: 하늘 여기저기에서 무작위로 연달아
 function show() {
-  const n = 7 + (Math.random() * 3 | 0);
+  const n = 5 + (Math.random() * 2 | 0);   // 원 축포 발 수 5~6(사용자: 너무 많다 → 7~9에서 줄임)
   let t = 0;
   for (let i = 0; i < n; i++) { t += rand(90, 200); setTimeout(randomLaunch, t); }
 }
