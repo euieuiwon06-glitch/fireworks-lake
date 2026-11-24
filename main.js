@@ -14,6 +14,7 @@ const CONFIG = {
   flowSpeed: [3, 10],   // 떨림 토막이 왼쪽으로 흐르는 속도(칸/초): 물가 → 화면 아래
   jitterRate: 4,        // 토막마다 떨림이 바뀌는 횟수(초당)
   glint: 0.04,
+  spaceMaxY: 120,       // 스페이스바 폭죽은 이 행보다 위에서 터짐
   boat: {
     bottom: 265,        // 배 바닥(물 위 줄) 행 — 사용자 지정 빨간 선 높이
     speed: 4,           // 칸/초 — 오른쪽 → 왼쪽, 천천히(한 바퀴 약 1분 20초)
@@ -338,12 +339,22 @@ function onDown(e) {
   launch(x, y);
 }
 
+// 스페이스바 = 하늘의 무작위 자리에 폭죽 하나(누를 때마다, 꾹 누름 반복은 무시)
+function onKey(e) {
+  if (e.code !== 'Space' && e.key !== ' ') return;
+  e.preventDefault();
+  if (e.repeat) return;
+  const x = rand(18, W - 19);
+  const top = skyline[Math.round(x)] - CONFIG.minAboveRidge;
+  launch(x, rand(22, Math.max(30, Math.min(top, CONFIG.spaceMaxY))));
+}
+
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124p'), loadImg('assets/fg.png?v=20261124p'),
-    loadImg('assets/boat.png?v=20261124p'),
-    fetch('assets/meta.json?v=20261124p').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124q'), loadImg('assets/fg.png?v=20261124q'),
+    loadImg('assets/boat.png?v=20261124q'),
+    fetch('assets/meta.json?v=20261124q').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
@@ -372,6 +383,7 @@ function onDown(e) {
     boat = { w: c.width, h: c.height, px, refl };
   }
   cvs.addEventListener('pointerdown', onDown);
+  window.addEventListener('keydown', onKey);
   cvs.addEventListener('contextmenu', e => e.preventDefault());
   let last = performance.now();
   function loop(now) {
