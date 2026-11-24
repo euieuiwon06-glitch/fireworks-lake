@@ -18,6 +18,7 @@ FLAT = os.path.join(ROOT, "..", "벡터", "tools", "flat_pixel_svg.py")
 CELL, SHIFT, WATER_PX = 4, 5, 930
 SKY_LUM = 75                # 이보다 어두우면 하늘 후보
 REFL_SAT, REFL_DIM = 0.8, 0.85   # 물에 비친 풍경 채도·밝기 배율
+WATER_DIM = 0.9             # 물 전체 밝기 배율
 EDGE_START = 3              # 물가에서 이 행 아래부터 흩어짐
 EDGE_MAX = 9                # 화면 맨 아래 흩어짐 줄 최대 길이(칸)
 ROW_SHIFT = 2.2             # 화면 맨 아래 줄 어긋남(칸, 표준편차)
@@ -163,6 +164,9 @@ def main():
                 if i < n1: orow[p] = True
                 p += d
         out[y] = row; fg[y] = np.where(orow, 255, fg[y])
+
+    # 물 전체 딤(사용자 요청: 살짝 더 어둡게)
+    out[water:] = np.clip(out[water:].astype(float) * WATER_DIM + 0.5, 0, 255).astype(np.uint8)
 
     skyline = [int(np.nonzero(fg[:, x])[0][0]) if fg[:, x].any() else water for x in range(W)]
 

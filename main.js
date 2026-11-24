@@ -5,7 +5,7 @@ const CONFIG = {
   reflectK: 0.5,        // 물 반사 세로 압축(하늘 높이 × K 만큼 아래로)
   reflectSat: 0.8,      // 반사 채도 배율(바탕 그림과 같음)
   reflectPinkSat: 0.96, // 분홍 반사 채도(0.8 × 1.2)
-  reflectDim: 0.85,     // 반사 밝기 배율(딤)
+  reflectDim: 0.77,     // 반사 밝기 배율(딤) — 물 전체 딤 0.9 반영(0.85×0.9)
   minAboveRidge: 14,    // 산·구름 선보다 최소 이만큼 위에서 터짐(칸)
   rocketTime: [0.85, 1.15],
   maxParticles: 12000,
@@ -267,7 +267,7 @@ function compose(time) {
       const sx = Math.max(0, Math.min(W - 1, x + dx));
       const si = sy * W + sx;
       let c = base[si];
-      if (baseLum[si] > 140 && hash(x * 3 + tick * 17, y * 31) < CONFIG.glint) c = C_GLINT;
+      if (baseLum[si] > 126 && hash(x * 3 + tick * 17, y * 31) < CONFIG.glint) c = C_GLINT;
       // 폭죽 반사
       let f = 0;
       for (const ry of [sy0, sy1]) {
@@ -341,9 +341,9 @@ function onDown(e) {
 // ---------- 시작 ----------
 (async function init() {
   const [bImg, fImg, boatImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124o'), loadImg('assets/fg.png?v=20261124o'),
-    loadImg('assets/boat.png?v=20261124o'),
-    fetch('assets/meta.json?v=20261124o').then(r => r.json()),
+    loadImg('assets/base.png?v=20261124p'), loadImg('assets/fg.png?v=20261124p'),
+    loadImg('assets/boat.png?v=20261124p'),
+    fetch('assets/meta.json?v=20261124p').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
