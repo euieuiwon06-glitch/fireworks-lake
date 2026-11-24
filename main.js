@@ -13,7 +13,14 @@ const CONFIG = {
   glowTime: 0.22,       // 터질 때 주변 하늘이 밝아지는 시간(초)
   flowSpeed: [3, 10],   // 떨림 토막이 왼쪽으로 흐르는 속도(칸/초): 물가 → 화면 아래
   jitterRate: 4,        // 토막마다 떨림이 바뀌는 횟수(초당)
-  glint: 0.04,          // 밝은 물 칸이 반짝일 확률(프레임당 1/8초 단위)
+  glint: 0.04,
+  boat: {
+    bottom: 312,        // 배 바닥(물 위 줄) 행
+    speed: 2.4,         // 칸/초 — 오른쪽 → 왼쪽, 아주 천천히(한 바퀴 약 2분 반)
+    gap: 40,            // 화면 밖에서 다시 나타나기까지 여유(칸)
+    startX: 170,        // 페이지를 열었을 때 배 왼쪽 끝 위치(칸) — 처음부터 보이게
+    reflect: 0.7,       // 물에 비친 배 세로 비율
+  },          // 밝은 물 칸이 반짝일 확률(프레임당 1/8초 단위)
 };
 const SKY_TOP = '#101738', SKY_LOW = '#142568', SKY_GLOW = '#1f2a59';
 const GLINT = '#f3e8da';
@@ -278,7 +285,44 @@ function compose(time) {
       buf32[y * W + x] = c;
     }
   }
+  drawBoat(time);
   ctx.putImageData(frame, 0, 0);
+}
+
+// ---------- 배 ----------
+let boat = null, startTime = null;   // { w, h, px: Uint32Array(0=투명), refl: Uint32Array }
+function drawBoat(time) {
+  if (!boat) return;
+  if (startTime === null) startTime = time;
+  const B = CONFIG.boat, span = W + boat.w + B.gap;
+  const t0 = (W + B.gap / 2 - B.startX) / B.speed;            // 시작 위치 맞춤
+  const bx = Math.round(W + B.gap / 2 - (((time - startTime + t0) * B.speed) % span));
+  const top = B.bottom - boat.h + 1 + Math.round(Math.sin(time * 1.3) * 0.6);   // 살짝 출렁
+  const tick = Math.floor(time * 8);
+  // 물에 비친 배(물결 따라 떨리고 군데군데 끊김)
+  for (let r = boat.h - 1; r >= 0; r--) {
+    const y = B.bottom + 1 + Math.round((boat.h - 1 - r) * B.reflect);
+    if (y >= H) continue;
+    const xo = Math.round(Math.sin(y * 0.9 + time * 2.4) * 1.1);
+    for (let c = 0; c < boat.w; c++) {
+      const v = boat.refl[r * boat.w + c];
+      if (!v) continue;
+      const x = bx + c + xo;
+      if (x < 0 || x >= W) continue;
+      if (hash((x + Math.floor(time * 3)) >> 1, y * 17 + tick) < 0.25) continue;
+      buf32[y * W + x] = v;
+    }
+  }
+  // 배
+  for (let r = 0; r < boat.h; r++) {
+    const y = top + r;
+    if (y < 0 || y >= H) continue;
+    for (let c = 0; c < boat.w; c++) {
+      const v = boat.px[r * boat.w + c];
+      const x = bx + c;
+      if (v && x >= 0 && x < W) buf32[y * W + x] = v;
+    }
+  }
 }
 
 // ---------- 입력 ----------
@@ -296,9 +340,10 @@ function onDown(e) {
 
 // ---------- 시작 ----------
 (async function init() {
-  const [bImg, fImg, m] = await Promise.all([
-    loadImg('assets/base.png?v=20261124g'), loadImg('assets/fg.png?v=20261124g'),
-    fetch('assets/meta.json?v=20261124g').then(r => r.json()),
+  const [bImg, fImg, boatImg, m] = await Promise.all([
+    loadImg('assets/base.png?v=20261124h'), loadImg('assets/fg.png?v=20261124h'),
+    loadImg('assets/boat.png?v=20261124h'),
+    fetch('assets/meta.json?v=20261124h').then(r => r.json()),
   ]);
   meta = m; waterY = m.waterY; skyline = m.skyline;
   base = new Uint32Array(pixels(bImg).buffer.slice(0));
@@ -313,6 +358,19 @@ function onDown(e) {
   baseLum = new Uint8Array(W * H);
   const bd = new Uint8Array(base.buffer);
   for (let i = 0; i < W * H; i++) baseLum[i] = bd[i * 4] * 0.299 + bd[i * 4 + 1] * 0.587 + bd[i * 4 + 2] * 0.114;
+  {
+    const c = document.createElement('canvas'); c.width = boatImg.width; c.height = boatImg.height;
+    const x = c.getContext('2d'); x.drawImage(boatImg, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    const n = c.width * c.height, px = new Uint32Array(n), refl = new Uint32Array(n);
+    for (let i = 0; i < n; i++) {
+      if (d[i * 4 + 3] < 128) continue;
+      const rgb = [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]];
+      px[i] = pack(rgb);
+      refl[i] = pack(reflectRgb('#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('')));
+    }
+    boat = { w: c.width, h: c.height, px, refl };
+  }
   cvs.addEventListener('pointerdown', onDown);
   cvs.addEventListener('contextmenu', e => e.preventDefault());
   let last = performance.now();
